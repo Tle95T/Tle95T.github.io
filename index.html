@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบตรวจสอบข้อมูลย้อนกลับ - ข้าวขาหมู</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Alpine.js for interactivity (Tabs & Modals) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f8fafc;
+        }
+        .hero-pattern {
+            background-color: #7c2d12;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239a3412' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -33px;
+            top: 6px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #ea580c;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 2px #ea580c;
+        }
+        /* Modal Animation */
+        [x-cloak] { display: none !important; }
+
+        /* ===== Enhanced Traceability UI ===== */
+        html { scroll-behavior: smooth; }
+        .status-pulse { animation: pulseSoft 2s infinite; }
+        @keyframes pulseSoft {
+            0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.18); }
+            50% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+        }
+        .search-focus:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(249,115,22,.18);
+            border-color: #f97316;
+        }
+        .step-card { transition: transform .2s ease, box-shadow .2s ease; }
+        .step-card:hover { transform: translateY(-2px); }
+        @media print {
+            body { background: #fff !important; }
+            header { box-shadow: none !important; }
+            .no-print, button, a[href^="https://docs.google.com/forms"] { display: none !important; }
+            [x-show="activeTab === 'customer'"] { display: none !important; }
+            [x-show="activeTab === 'backend'] { display: block !important; }
+            .timeline-item { break-inside: avoid; }
+            footer { margin-top: 20px; }
+        }
+
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col"
+      x-data="{
+        activeTab: 'customer',
+        isModalOpen: false,
+        currentForm: '',
+        lotId: 'PK-260930-01',
+        searchLot: '',
+        searched: false,
+        scanStatus: 'พร้อมใช้งาน',
+        searchLotId() {
+            this.searched = true;
+            const q = this.searchLot.trim().toUpperCase();
+            if (!q) {
+                this.scanStatus = 'กรุณากรอก Lot ID';
+            } else if (q === this.lotId) {
+                this.scanStatus = 'พบข้อมูล Lot ID: ' + this.lotId;
+                this.activeTab = 'backend';
+            } else {
+                this.scanStatus = 'ไม่พบ Lot ID นี้ในข้อมูลตัวอย่าง';
+            }
+        },
+        resetSearch() {
+            this.searchLot = '';
+            this.searched = false;
+            this.scanStatus = 'พร้อมใช้งาน';
+        },
+        printReport() {
+            this.activeTab = 'backend';
+            setTimeout(() => window.print(), 100);
+        }
+      }">
+
+    <!-- Header Section -->
+    <header class="hero-pattern text-white shadow-lg relative overflow-hidden">
+        <div class="absolute inset-0 bg-black opacity-20"></div>
+        <div class="container mx-auto px-4 py-8 relative z-10 flex flex-col items-center text-center">
+            <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-4 shadow-xl border-4 border-orange-500">
+                <i class="fa-solid fa-utensils text-4xl text-orange-600"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">ข้าวขาหมู</h1>
+            <p class="text-orange-100 text-lg md:text-xl font-light">ระบบตรวจสอบข้อมูลย้อนกลับ (Traceability)</p>
+            <div class="mt-6 inline-block bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/30">
+                <p class="text-sm font-medium"><i class="fa-solid fa-check-circle text-green-400 mr-2"></i>สินค้าผ่านการตรวจสอบคุณภาพ</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-4xl">
+        
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-8">
+            <div class="bg-white rounded-xl shadow-sm inline-flex p-1 border border-slate-200 w-full sm:w-auto overflow-x-auto">
+                <button @click="activeTab = 'customer'" 
+                        :class="{ 'bg-orange-500 text-white shadow-md': activeTab === 'customer', 'text-slate-600 hover:text-orange-500': activeTab !== 'customer' }"
+                        class="whitespace-nowrap px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 flex-1 sm:flex-none">
+                    <i class="fa-solid fa-user"></i> ข้อมูลสำหรับลูกค้า
+                </button>
+                <button @click="activeTab = 'backend'" 
+                        :class="{ 'bg-orange-500 text-white shadow-md': activeTab === 'backend', 'text-slate-600 hover:text-orange-500': activeTab !== 'backend' }"
+                        class="whitespace-nowrap px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 flex-1 sm:flex-none">
+                    <i class="fa-solid fa-cogs"></i> ข้อมูลเบื้องหลัง (ผลิต)
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick Search / Actions -->
+        <section class="no-print bg-white rounded-2xl shadow-md border border-slate-100 p-5 mb-8">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h2 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-qrcode text-orange-500"></i>
+                        ตรวจสอบ Lot ID
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">กรอก Lot ID เพื่อเปิดบันทึกการผลิตของล็อตนั้น</p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <input x-model="searchLot"
+                           @keydown.enter="searchLotId()"
+                           class="search-focus w-full sm:w-64 border border-slate-200 rounded-lg px-4 py-2 text-sm"
+                           placeholder="เช่น PK-260930-01"
+                           aria-label="ค้นหา Lot ID">
+                    <button @click="searchLotId()"
+                            class="bg-orange-500 hover:bg-orange-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition">
+                        <i class="fa-solid fa-magnifying-glass mr-1"></i> ค้นหา
+                    </button>
+                    <button @click="resetSearch()"
+                            class="border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg px-4 py-2 text-sm font-medium">
+                        ล้าง
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500 status-pulse"></span>
+                    <span x-text="scanStatus" class="text-slate-600"></span>
+                </div>
+                <button @click="printReport()"
+                        class="text-sm text-slate-600 hover:text-orange-600 font-medium">
+                    <i class="fa-solid fa-print mr-1"></i> พิมพ์รายงานการผลิต
+                </button>
+            </div>
+        </section>
+
+        <!-- ==================== CUSTOMER VIEW TAB ==================== -->
+        <div x-show="activeTab === 'customer'" x-transition.opacity.duration.300ms>
+            
+            <!-- Product Identity Card -->
+            <div class="bg-white rounded-2xl shadow-md p-6 mb-8 border border-slate-100 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-2 h-full bg-orange-500"></div>
+                <div class="flex flex-col md:flex-row gap-6 items-start">
+                    <div class="w-full md:w-1/3 flex-shrink-0">
+                         <!-- Using a representative product image from the provided set -->
+                         <img src="20260929_180119.jpg" alt="ข้าวขาหมู" class="w-full h-48 object-cover rounded-xl shadow-sm" onerror="this.src='https://placehold.co/400x300/fed7aa/7c2d12?text=Pork+Knuckle'">
+                    </div>
+                    <div class="w-full md:w-2/3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-4">
+                            <h2 class="text-2xl font-bold text-slate-800">รายละเอียดผลิตภัณฑ์</h2>
+                            <span class="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-semibold border border-slate-200">
+                                <i class="fa-solid fa-tag mr-1 text-orange-500"></i>
+                                Lot ID: PK-260930-01
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="flex items-start gap-3">
+                                <div class="bg-orange-100 p-2 rounded-lg text-orange-600 mt-0.5">
+                                    <i class="fa-solid fa-box w-4 text-center"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">ชื่อผลิตภัณฑ์</p>
+                                    <p class="font-medium text-slate-800">ข้าวขาหมู</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="bg-orange-100 p-2 rounded-lg text-orange-600 mt-0.5">
+                                    <i class="fa-solid fa-user-chef w-4 text-center"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">ผู้ผลิต</p>
+                                    <p class="font-medium text-slate-800">สุรางค์รัตน์ ดามนา</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="bg-orange-100 p-2 rounded-lg text-orange-600 mt-0.5">
+                                    <i class="fa-solid fa-location-dot w-4 text-center"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">สถานที่ผลิต</p>
+                                    <p class="font-medium text-slate-800">ศูนย์อาหารเทคโน</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="bg-orange-100 p-2 rounded-lg text-orange-600 mt-0.5">
+                                    <i class="fa-solid fa-phone w-4 text-center"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">ช่องทางติดต่อ</p>
+                                    <p class="font-medium text-slate-800">061-410-9196</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simplified Process Flow for Customers -->
+            <h3 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <i class="fa-solid fa-route text-orange-500"></i> ตรวจสอบข้อมูลย้อนกลับ (Traceability)
+            </h3>
+            <p class="text-sm text-slate-500 mb-4">คุณสามารถคลิกที่แต่ละขั้นตอนเพื่อดูข้อมูลบันทึกจริงจากสถานที่ผลิต (เปิดในหน้าต่างใหม่)</p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <!-- Step 1 -->
+                <a href="https://docs.google.com/spreadsheets/d/1gB28iG7882cs9L5U_fn5TiBtpGUCXWI6IrKuOrZ3xsE/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-truck-ramp-box text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">1. รับวัตถุดิบ</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                <!-- Step 2 -->
+                <a href="https://docs.google.com/spreadsheets/d/15KRsmTzEx0auRvcvdMVgOggZSBhXvaiR9ESLs0pUfnU/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-shower text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">2. ล้างทำความสะอาด</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                 <!-- Step 3 -->
+                 <a href="https://docs.google.com/spreadsheets/d/1prl5nW6Zhx1Jq6HsVzAPcJtlUXt62k4tPq9Yr_qr5ZA/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-fire-burner text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">3. ต้มเคี่ยวพะโล้</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                <!-- Step 4 -->
+                <a href="https://docs.google.com/spreadsheets/d/1cF1X2RE9Kb7_cTzpP_DKYyiWr7eMQPIZoUExBOw79Hw/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-magnifying-glass-chart text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">4. ตรวจสอบคุณภาพ</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                <!-- Step 5 -->
+                <a href="https://docs.google.com/spreadsheets/d/1V3NUyMnW-rsHcCEGlII2hxIROYPosO5E-SURHrdNOJ0/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-box-open text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">5. บรรจุภัณฑ์</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                <!-- Step 6 -->
+                <a href="https://docs.google.com/spreadsheets/d/1im04nNeOfFhfQVTyjJMXB5kqOJI5a_brftFnWR-2hsg/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-pallet text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">6. จัดเก็บสต็อก</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+                <!-- Step 7 -->
+                <a href="https://docs.google.com/spreadsheets/d/1Pviduid_4-K3NnQ-LC56eiZx8TEAhLVV5c0Etcwiogw/edit?usp=sharing" target="_blank" class="step-card bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-center group hover:shadow-md hover:border-orange-300 transition-all cursor-pointer block">
+                    <div class="w-12 h-12 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-orange-100 transition-transform">
+                        <i class="fa-solid fa-shop text-xl text-orange-500"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-1 text-sm">7. พร้อมจำหน่าย</h4>
+                    <p class="text-xs text-blue-500 mt-2 font-medium"><i class="fa-solid fa-table-list mr-1"></i>ดูบันทึกข้อมูล</p>
+                </a>
+            </div>
+            
+            <!-- Quality Guarantee -->
+            <div class="mt-8 bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                <i class="fa-solid fa-leaf text-3xl text-green-500 mb-3"></i>
+                <h3 class="text-lg font-bold text-green-800 mb-2">คำมั่นสัญญาของเรา</h3>
+                <p class="text-green-700 text-sm max-w-2xl mx-auto">เราใส่ใจในทุกขั้นตอนการผลิต ตั้งแต่การคัดเลือกวัตถุดิบไปจนถึงมือคุณ เพื่อให้คุณมั่นใจว่าได้รับประทานข้าวขาหมูที่อร่อย สะอาด และตรวจสอบได้</p>
+            </div>
+        </div>
+
+        <!-- ==================== BACKEND VIEW TAB ==================== -->
+        <div x-show="activeTab === 'backend'" x-cloak x-transition.opacity.duration.300ms>
+            
+            <div class="bg-white rounded-2xl shadow-md p-4 sm:p-6 border border-slate-100">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-800"><i class="fa-solid fa-clipboard-list text-orange-500 mr-2"></i> บันทึกข้อมูลการผลิต (Production Log)</h2>
+                    <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-medium border border-slate-200 whitespace-nowrap">Lot ID: PK-260930-01</span>
+                </div>
+
+                <!-- Production Summary -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <div class="rounded-xl bg-orange-50 border border-orange-100 p-4">
+                        <p class="text-xs text-orange-600 font-semibold">LOT</p>
+                        <p class="font-bold text-slate-800 mt-1">PK-260930-01</p>
+                    </div>
+                    <div class="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                        <p class="text-xs text-blue-600 font-semibold">วัตถุดิบ</p>
+                        <p class="font-bold text-slate-800 mt-1">25 kg</p>
+                    </div>
+                    <div class="rounded-xl bg-green-50 border border-green-100 p-4">
+                        <p class="text-xs text-green-600 font-semibold">QC</p>
+                        <p class="font-bold text-slate-800 mt-1">ผ่าน</p>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                        <p class="text-xs text-slate-500 font-semibold">สถานะ</p>
+                        <p class="font-bold text-green-600 mt-1">พร้อมจำหน่าย</p>
+                    </div>
+                </div>
+
+                <!-- Detailed Timeline -->
+                <div class="pl-4 sm:pl-8 relative border-l-2 border-slate-200 ml-2 sm:ml-4 space-y-8 pb-4">
+                    
+                    <!-- Step 1: Receiving -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            1. รับวัตถุดิบ <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                    <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ข้อมูลการรับเข้า</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><i class="fa-regular fa-clock text-slate-400 w-4"></i> <span class="font-normal text-slate-500">วันที่:</span> 30 ก.ย. 2569 05:30 น.</li>
+                                        <li><i class="fa-solid fa-truck text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ขาย:</span> ฟาร์มหมูเจริญทรัพย์</li>
+                                        <li><i class="fa-solid fa-box text-slate-400 w-4"></i> <span class="font-normal text-slate-500">วัตถุดิบ:</span> ขาหมูสด (ขาหน้า/ขาหลัง)</li>
+                                        <li><i class="fa-solid fa-weight-scale text-slate-400 w-4"></i> <span class="font-normal text-slate-500">จำนวน:</span> 25 kg</li>
+                                        <li><i class="fa-solid fa-user-check text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ตรวจรับ:</span> สุรางค์รัตน์ ดามนา</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017564.jpg" alt="รับวัตถุดิบ" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=Raw+Materials'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Washing -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            2. ล้างทำความสะอาด <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                     <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ข้อมูลการปฏิบัติงาน</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><i class="fa-regular fa-clock text-slate-400 w-4"></i> <span class="font-normal text-slate-500">เวลา:</span> 06:00 น.</li>
+                                        <li><i class="fa-solid fa-hand-sparkles text-slate-400 w-4"></i> <span class="font-normal text-slate-500">วิธีการ:</span> ขัดเกลือ ล้างน้ำสะอาด</li>
+                                        <li><i class="fa-solid fa-user-gear text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ปฏิบัติ:</span> ทีมงาน 1</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017568.jpg" alt="ล้างทำความสะอาด" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=Washing'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Cooking -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            3. ต้มเคี่ยวพะโล้ <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                     <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ข้อมูลการปรุง</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><i class="fa-regular fa-clock text-slate-400 w-4"></i> <span class="font-normal text-slate-500">เวลาต้ม:</span> 07:00 น. - 10:00 น.</li>
+                                        <li><i class="fa-solid fa-temperature-arrow-up text-slate-400 w-4"></i> <span class="font-normal text-slate-500">อุณหภูมิ:</span> ไฟกลางค่อนอ่อน</li>
+                                        <li><i class="fa-solid fa-leaf text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ส่วนผสม:</span> เครื่องพะโล้, สามเกลอ</li>
+                                        <li><i class="fa-solid fa-user-chef text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ปฏิบัติ:</span> เชฟหลัก</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017611.jpg" alt="ต้มขาหมู" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=Cooking'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: QC -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            4. ตรวจสอบคุณภาพ (QC) <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                     <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ผลการตรวจสอบ</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1.5 text-slate-700">
+                                        <li class="flex items-center text-green-600"><i class="fa-solid fa-check-circle w-5"></i> ความเปื่อยนุ่ม: ผ่าน</li>
+                                        <li class="flex items-center text-green-600"><i class="fa-solid fa-check-circle w-5"></i> รสชาติน้ำซุป: ผ่าน</li>
+                                        <li class="flex items-center text-green-600"><i class="fa-solid fa-check-circle w-5"></i> สีสัน: ผ่าน (น้ำตาลทอง)</li>
+                                        <li class="mt-2"><i class="fa-solid fa-user-check text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ตรวจ:</span> สุรางค์รัตน์</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017628.jpg" alt="ตรวจสอบคุณภาพ" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=QC'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Pack -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            5. บรรจุ <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                    <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ข้อมูลบรรจุ</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><i class="fa-regular fa-clock text-slate-400 w-4"></i> <span class="font-normal text-slate-500">เวลา:</span> 10:30 น.</li>
+                                        <li><i class="fa-solid fa-bag-shopping text-slate-400 w-4"></i> <span class="font-normal text-slate-500">รูปแบบ:</span> ถุงร้อน / กล่อง</li>
+                                        <li><i class="fa-solid fa-cubes text-slate-400 w-4"></i> <span class="font-normal text-slate-500">ผู้ปฏิบัติ:</span> ทีมบรรจุ</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017637.jpg" alt="บรรจุถุง" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=Packing'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 6: Stock -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            6. สต็อก <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">บันทึกแล้ว</span>
+                        </h3>
+                        <div class="mt-3 bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                    <p class="text-xs text-slate-500 mb-1 font-semibold uppercase">ข้อมูลจัดการสินค้า</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><i class="fa-regular fa-clock text-slate-400 w-4"></i> <span class="font-normal text-slate-500">เวลาเข้าสต็อก:</span> 11:30 น.</li>
+                                        <li><i class="fa-solid fa-boxes-stacked text-slate-400 w-4"></i> <span class="font-normal text-slate-500">สถานที่:</span> พื้นที่เตรียมจำหน่าย</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-slate-200 h-32 md:h-full min-h-[120px]">
+                                    <img src="1000017639.jpg" alt="สต็อก" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=Stock'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 7: Sales -->
+                    <div class="timeline-item relative">
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                            7. จำหน่าย <span class="bg-green-100 text-green-700 text-[10px] sm:text-xs px-2 py-0.5 rounded font-normal">สถานะปัจจุบัน</span>
+                        </h3>
+                        <div class="mt-3 bg-orange-50 rounded-xl p-3 sm:p-4 border border-orange-200 shadow-sm">
+                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                                <div>
+                                    <p class="text-xs text-orange-600 mb-1 font-bold uppercase"><i class="fa-solid fa-store"></i> พร้อมจำหน่าย</p>
+                                    <ul class="text-xs sm:text-sm font-medium space-y-1 text-slate-700">
+                                        <li><span class="font-normal text-slate-600">จุดจำหน่าย:</span> ศูนย์อาหารเทคโน</li>
+                                        <li><span class="font-normal text-slate-600">สินค้า:</span> ข้าวขาหมูกล่อง, ถุง</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-white p-1 rounded-lg border border-orange-200 h-32 md:h-full min-h-[120px]">
+                                     <img src="1000017638.jpg" alt="จำหน่ายกล่อง" class="w-full h-full object-cover rounded" onerror="this.src='https://placehold.co/400x300/fed7aa/7c2d12?text=Sale'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+             <!-- Data Entry Channels (Mockup Modals) -->
+            <div class="mt-8 bg-slate-800 rounded-xl p-4 sm:p-6 shadow-lg text-white">
+                <div class="flex items-center gap-3 mb-4 border-b border-slate-700 pb-3">
+                    <i class="fa-solid fa-desktop text-2xl text-blue-400"></i>
+                    <div>
+                        <h3 class="font-bold text-lg">ช่องทางการบันทึกข้อมูล (Data Entry)</h3>
+                        <p class="text-xs text-slate-400">สำหรับพนักงานบันทึกข้อมูลเข้าสู่ระบบ Traceability</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLSdbriTfVplgqIJURsKwVm0EL02o2sbSbbnYto7UUSuXQzrang/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-truck-ramp-box text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>1. ฟอร์มรับวัตถุดิบ</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfnCGsZqHreCvFzoWZJpwEkGgLl9ja8EK2KKt4JBy78Pc7TsA/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-shower text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>2. ฟอร์มล้าง</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/10M8o64k2JyBAMKaWYUWehvLP4T7bdT_c9cKm9eFrbQg/edit" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-fire-burner text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>3. ฟอร์มต้ม</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfArbXMlxeHgcZmy7qsUt3nKih8lTHwCeYFo_CcpJ66H33JSQ/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-magnifying-glass-chart text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>4. ฟอร์ม QC</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfZ3dlCdyI4BqURNDfvhsGExy-qcPObzmeAwIPa6Cymc99tEw/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-box-open text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>5. ฟอร์มบรรจุ</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLScb7liic0f1PmLTNCRl6E2myWwwcJHO58E1q92RFrjajhSktg/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-pallet text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>6. ฟอร์มสต็อก</span>
+                     </a>
+                     <a href="https://docs.google.com/forms/d/e/1FAIpQLScQ4dpIvT4-qyOBVKY_uk3GQ-RDOOy4rzW0-aoLoXCZ5WFa_A/viewform?usp=header" target="_blank" class="bg-slate-700 hover:bg-blue-600 border border-slate-600 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex flex-col items-center text-center gap-1 group">
+                        <i class="fa-solid fa-shop text-lg text-slate-300 group-hover:text-white mt-1"></i> <span>7. ฟอร์มจำหน่าย</span>
+                     </a>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <button class="no-print fixed bottom-5 right-5 w-11 h-11 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg transition"
+            onclick="window.scrollTo({top:0,behavior:'smooth'})"
+            title="กลับด้านบน"
+            aria-label="กลับด้านบน">
+        <i class="fa-solid fa-arrow-up"></i>
+    </button>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-6 mt-auto border-t border-slate-800">
+        <div class="container mx-auto px-4 text-center text-xs">
+            <p>&copy; 2026 ข้าวขาหมู สุรางค์รัตน์ ดามนา ศูนย์อาหารเทคโน</p>
+            <p class="mt-1">Traceability System Demo for Educational Project</p>
+        </div>
+    </footer>
+
+</body>
+</html>
